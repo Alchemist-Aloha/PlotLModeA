@@ -95,7 +95,7 @@ Required files:
 - analysis_of_local_modes.csv
 
 Optional file:
-- bodipy.toml (or any TOML provided with --group-toml)
+- group.toml provided with --group-toml
 
 #### Core plotting logic
 
