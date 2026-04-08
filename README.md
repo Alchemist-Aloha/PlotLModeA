@@ -175,7 +175,10 @@ popElement = [["C2","H13"],["C10","H17"]]
 Rules:
 - Group name comes from table array name (for example `ch-methyl`).
 - `popElement` tuple tokens must match `AtomSymbols` tokens in analysis CSV.
-- `popMode` limits matching mode sizes (`2`, `3`, `4`).
+- `popMode` limits matching mode sizes (`2`, `3`, `4`). 
+  - 2: stretch modes 
+  - 3: bending modes
+  - 4: dihedral modes. 
 - If `popMode` is omitted, defaults are `[2, 3, 4]`.
 ## Project structure
 
