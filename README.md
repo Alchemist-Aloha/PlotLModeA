@@ -1,6 +1,6 @@
 # Extract and Plot LModeA Output
 
-This project is a uv-managed, installable Python CLI package for parsing LModeA v3.0 output and plotting local mode contributions.
+This project is for parsing LModeA v3.0 output and plotting local mode contributions for vibrational normal modes.
 
 ## Project components
 
