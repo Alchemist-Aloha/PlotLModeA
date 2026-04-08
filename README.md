@@ -1,27 +1,10 @@
-# Plot LModeA Project Guide
+# Extract and Plot LModeA Output
 
-This directory contains an installable Python tool for post-processing LModeA output.
+This project is a uv-managed, installable Python CLI package for parsing LModeA v3.0 output and plotting local mode contributions.
 
-Package name:
-- plotlmodea
+## Project components
 
-Installed CLI commands:
-- lmodea-extract
-- lmodea-plot
-
-Compatibility wrappers are still present:
-- extractor.py
-- plotLmodes.py
-
-Core logic modules live in:
-- src/plotlmodea/extractor.py
-- src/plotlmodea/plot_lmodes.py
-
-## 1) What each script does
-
-### extractor.py
-
-Purpose:
+### lmodea-extract:
 - Reads an LModeA output text file (for example bodipy.out).
 - Extracts three datasets:
   - Analysis of local modes table.
@@ -29,17 +12,10 @@ Purpose:
   - Normal mode properties (frequency, reduced mass, force constant, IR intensity).
 - Writes those datasets as CSV files used by plotting and downstream analysis.
 
-Main outputs:
-- analysis_of_local_modes.csv
-- local_mode_properties.csv
-- normal_mode_properties.csv
-
-### plotLmodes.py
-
-Purpose:
+### lmodea-plot:
 - Reads local_mode_properties.csv matrix and normalizes local-mode contributions per normal mode to 100%.
 - Reads analysis_of_local_modes.csv labels (for legend and grouping metadata).
-- Optionally reads a TOML file (default: bodipy.toml) with pop/group rules.
+- Optionally reads a TOML file with pop/group rules.
 - Produces a stacked bar chart image with:
   - x-axis: selected normal modes.
   - y-axis: local mode character (%).
@@ -48,100 +24,59 @@ Purpose:
 Main output:
 - local_mode_character.png (or your selected output name)
 
-## 2) Requirements
+## Setup
 
-Python:
-- Python 3.11+ recommended.
-  - plotLmodes.py uses tomllib for TOML parsing (standard in Python 3.11+).
+Requirements:
+- Python >= 3.11
+- uv
 
-Packages:
-- numpy
-- matplotlib
+Install dependencies and create environment:
+- `uv sync`
 
-Install and sync with uv:
-- uv sync
+Check command help:
+- `uv run lmodea-extract --help`
+- `uv run lmodea-plot --help`
 
-Run commands with uv:
-- uv run lmodea-extract --help
-- uv run lmodea-plot --help
+## Typical workflow 
 
-## 3) Typical workflow
+Because default filenames are relative, run commands from the dataset folder unless you pass explicit paths.
 
-Step A: Extract CSV tables from LModeA output
-- uv run lmodea-extract -i bodipy.out
+Option A: run from `bodipy` directory
 
-Step B: Plot contributions
-- uv run lmodea-plot
+1. `cd bodipy`
+2. `uv run --project .. lmodea-extract -i bodipy.out`
+3. `uv run --project .. lmodea-plot --group-toml bodipy.toml --output bodipy_grouped.png`
 
-Step C: Plot with grouping TOML
-- uv run lmodea-plot --group-toml bodipy.toml --output bodipy_grouped.png
+Option B: run from project root with explicit paths
 
-## 4) extractor.py details
+1. `uv run lmodea-extract -i bodipy/bodipy.out --analysis-csv bodipy/analysis_of_local_modes.csv --local-props-csv bodipy/local_mode_properties.csv --normal-modes-csv bodipy/normal_mode_properties.csv`
+2. `uv run lmodea-plot --matrix-csv bodipy/local_mode_properties.csv --analysis-csv bodipy/analysis_of_local_modes.csv --group-toml bodipy/bodipy.toml --output bodipy/bodipy_grouped.png`
 
-### Inputs
+## Command reference
 
-Required by content:
-- LModeA output file containing these sections:
-  - Cartesian coordinates
-  - Analysis of Local Modes
-  - Decomposition of normal modes into local modes
-  - Results of vibrations
+### lmodea-extract
 
-CLI option:
-- -i, --input
-  - Path to input .out file
-  - Default: bodipy.out
-
-### Outputs and columns
-
-1) analysis_of_local_modes.csv
-- Columns:
-  - No, i, j, k, l, q_n, Name, AtomSymbols
-- AtomSymbols is generated from the atom index-to-element mapping parsed from Cartesian coordinates.
-  - Example for bond: C6-H4
-  - Example for angle: C6-C1-C2
-  - Example for dihedral: C6-C1-C2-C5
-
-2) local_mode_properties.csv
-- Header row is normal mode indices.
-- Each following row corresponds to one q_n row from the decomposition matrix.
-
-3) normal_mode_properties.csv
-- Columns:
-  - Mode
-  - Irrep
-  - Frequency_cm-1
-  - ReducedMass_AMU
-  - ForceConstant_mDyn_per_A
-  - IRIntensity_km_per_mol
-
-### Full CLI
-
-- uv run lmodea-extract
-- uv run lmodea-extract -i bodipy.out
-- uv run lmodea-extract --analysis-csv analysis_of_local_modes.csv --local-props-csv local_mode_properties.csv --normal-modes-csv normal_mode_properties.csv
+Purpose:
+- Parse an LModeA `.out` file and export:
+  - `analysis_of_local_modes.csv`
+  - `local_mode_properties.csv`
+  - `normal_mode_properties.csv`
 
 Options:
-- --analysis-csv
-  - Output path for local mode parameter table
-  - Default: analysis_of_local_modes.csv
-- --local-props-csv
-  - Output path for decomposition matrix
-  - Default: local_mode_properties.csv
-- --normal-modes-csv
-  - Output path for normal mode properties
-  - Default: normal_mode_properties.csv
+- `-i`, `--input` (Path to LModeA output file)
+- `--analysis-csv` (Output CSV path for Analysis of Local Modes table, default: `analysis_of_local_modes.csv`)
+- `--local-props-csv` (Output CSV path for Local mode properties table, default: `local_mode_properties.csv`)
+- `--normal-modes-csv` (Output CSV path for normal mode properties, default: `normal_mode_properties.csv`)
 
-### Error behavior
+### lmodea-plot
 
-extractor.py raises descriptive ValueError messages when required sections are missing or malformed, for example:
-- Could not find section: Analysis of Local Modes
-- Could not find decomposition section for local mode matrix
-- Parsed empty decomposition matrix
+Purpose:
+- Read extracted CSVs.
+- Normalize local-mode contribution per normal mode to 100%.
+- Optionally group modes from TOML rules.
+- Produce stacked bar plot with legend panel on the right.
 
-## 5) plotLmodes.py details
-
-### Inputs
+#### Inputs
 
 Required files:
 - local_mode_properties.csv
@@ -150,7 +85,7 @@ Required files:
 Optional file:
 - bodipy.toml (or any TOML provided with --group-toml)
 
-### Core plotting logic
+#### Core plotting logic
 
 1. Load matrix and header mode labels.
 2. Normalize each normal-mode column so each column sums to 100%.
@@ -162,7 +97,7 @@ Optional file:
 6. Rank rows by total contribution and keep top N via --top-n.
 7. Plot stacked bars and render legend in right panel.
 
-### Grouping algorithm summary
+#### Grouping algorithm summary
 
 For each local mode row:
 - mode_size is inferred from nonzero i,j,k,l
@@ -181,104 +116,72 @@ For each TOML group rule:
 All matched rows for a group are summed into one grouped row.
 First matching group wins for a row (rows are assigned once).
 
-### Group colors
+#### Group colors
 
 - Grouped rows share a color per group name.
 - Ungrouped rows use gray.
 
-### Figure layout
+#### Figure layout
 
 - Two-panel figure:
   - Left panel: stacked bar chart (60% width)
   - Right panel: legend area (40% width)
 - This prevents chart compression and keeps legend readable.
 
-### Full CLI
-
-- uv run lmodea-plot
-- uv run lmodea-plot --output local_mode_character_all.png
-- uv run lmodea-plot --max-modes 48 --top-n 48
-- uv run lmodea-plot --mode-list 1,2,5,10
-- uv run lmodea-plot --group-toml bodipy.toml --output bodipy_grouped.png
-
 Options:
-- --matrix-csv
-  - Input matrix CSV
-  - Default: local_mode_properties.csv
-- --analysis-csv
-  - Input analysis CSV
-  - Default: analysis_of_local_modes.csv
-- --output
-  - Output image path
-  - Default: local_mode_character.png
-- --max-modes
-  - Number of normal modes from start of matrix header
-  - Default: 48
-- --mode-list
-  - Comma-separated explicit normal mode list
-  - Overrides --max-modes
-- --top-n
-  - Number of local-mode rows (after grouping) to keep in legend/chart
-  - Remaining rows merged to Others
-  - Default: 48
-- --group-toml
-  - TOML path for optional grouping rules
-  - Default: bodipy.toml
+- `--matrix-csv` (CSV file with local mode properties matrix (q_n vs normal modes), default: `local_mode_properties.csv`)
+- `--analysis-csv` (CSV file with local mode property analysis (No, i, j, k, l, q_n, Name, AtomSymbols), default: `analysis_of_local_modes.csv`)
+- `--output` (Output PNG file for the plot, default: `local_mode_character.png`)
+- `--max-modes` (Number of normal modes (columns) to plot, default: `888`)
+- `--mode-list` (comma-delimited mode ids, overrides `--max-modes`)
+- `--top-n` (Number of local modes (rows) to show in legend, default: `888`)
+- `--group-toml` (Optional TOML file with pop/group rules)
 
-## 6) TOML format reference
+## TOML grouping format
 
 Example:
 
+```toml
 [[ch-methyl]]
 popElement = [["C6","H4"],["C6","H6"],["C6","H5"]]
 popMode = [2]
 
 [[ch-ring]]
 popElement = [["C2","H13"],["C10","H17"]]
+```
+
+Rules:
+- Group name comes from table array name (for example `ch-methyl`).
+- `popElement` tuple tokens must match `AtomSymbols` tokens in analysis CSV.
+- `popMode` limits matching mode sizes (`2`, `3`, `4`).
+- If `popMode` is omitted, defaults are `[2, 3, 4]`.
+## Project structure
+
+```
+project/
+  pyproject.toml
+  uv.lock
+  README.md
+  src/
+    plotlmodea/
+      __init__.py
+      __main__.py
+      extractor.py
+      plot_lmodes.py
+  example/
+    example.out
+    example.toml
+    analysis_of_local_modes.csv
+    local_mode_properties.csv
+    normal_mode_properties.csv
+```
 
 Notes:
-- Table array name is used as the group name in legend and color mapping.
-- popElement entries must match AtomSymbols token style from analysis_of_local_modes.csv.
-- If popMode is omitted, default allowed modes are [2, 3, 4].
+- The installable package code lives under `src/plotlmodea`.
+## Source files
 
-## 7) Practical tips
-
-- If grouped colors are not visible:
-  - Ensure rows are actually grouped (matching token style and popMode).
-  - Check that the TOML file path is correct.
-- If requested modes fail:
-  - Verify mode indices in --mode-list exist in matrix header.
-- If no TOML is provided or file is missing:
-  - Script runs without grouping.
-
-## 8) Reproducible command set
-
-From this project directory:
-
-1. Extract tables
-- uv run lmodea-extract -i bodipy.out
-
-2. Plot baseline
-- uv run lmodea-plot --output local_mode_character.png
-
-3. Plot grouped
-- uv run lmodea-plot --group-toml bodipy.toml --output bodipy_grouped.png
-
-4. Plot selected normal modes
-- uv run lmodea-plot --mode-list 1,2,5,10 --group-toml bodipy.toml --output local_mode_character_selected.png
-
-## 9) File map in this folder
-
-- pyproject.toml
-- uv.lock
-- src/plotlmodea/extractor.py
-- src/plotlmodea/plot_lmodes.py
-- extractor.py
-- plotLmodes.py
-- bodipy.out
-- bodipy.toml
-- analysis_of_local_modes.csv
-- local_mode_properties.csv
-- normal_mode_properties.csv
-- local_mode_character.png
-- bodipy_grouped.png
+- `src/plotlmodea/extractor.py`: extraction engine and CLI main
+- `src/plotlmodea/plot_lmodes.py`: plotting engine and CLI main
+- `src/plotlmodea/__main__.py`: module execution entry (`python -m plotlmodea`)
+- `pyproject.toml`: package metadata, dependencies, and scripts
+- `uv.lock`: locked dependency set

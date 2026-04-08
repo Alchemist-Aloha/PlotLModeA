@@ -276,7 +276,7 @@ def main():
 	parser = argparse.ArgumentParser(
 		description="Extract 'Analysis of Local Modes' and 'Local mode properties' tables from an LModeA .out file."
 	)
-	parser.add_argument("-i", "--input", default="bodipy.out", help="Path to LModeA output file")
+	parser.add_argument("-i", "--input", help="Path to LModeA output file")
 	parser.add_argument(
 		"--analysis-csv",
 		default="analysis_of_local_modes.csv",

@@ -79,7 +79,9 @@ def extract_atoms_from_label(label):
     return set(tokens)
 
 
-def parse_group_config(config_path):
+def parse_group_config(config_path=None):
+    if not config_path:
+        return []
     config_file = Path(config_path)
     if not config_file.exists():
         return []
@@ -144,12 +146,15 @@ def apply_grouping(norm_data, analysis_rows, group_rules):
     row_groups = ["ungrouped"] * n_rows
 
     if not group_rules:
-        return norm_data, row_labels, row_groups
+        # No TOML grouping requested: keep each local mode independent for normal plotting/colors.
+        group_members = {"ungrouped": list(row_labels)}
+        return norm_data, row_labels, row_labels, group_members
 
     assigned = set()
     grouped_rows = []
     grouped_labels = []
     grouped_names = []
+    group_members = {}
 
     for rule in group_rules:
         match_idx = []
@@ -166,20 +171,49 @@ def apply_grouping(norm_data, analysis_rows, group_rules):
         grouped_rows.append(group_sum)
         grouped_labels.append(rule["name"])
         grouped_names.append(rule["name"])
+        group_members[rule["name"]] = [row_labels[idx] for idx in match_idx]
         assigned.update(match_idx)
 
+    ungrouped_members = []
     for idx in range(n_rows):
         if idx in assigned:
             continue
         grouped_rows.append(norm_data[idx, :])
         grouped_labels.append(row_labels[idx])
         grouped_names.append("ungrouped")
+        ungrouped_members.append(row_labels[idx])
+
+    if ungrouped_members:
+        group_members["ungrouped"] = ungrouped_members
 
     if not grouped_rows:
-        return norm_data, row_labels, row_groups
+        return norm_data, row_labels, row_groups, {"ungrouped": list(row_labels)}
 
     grouped_data = np.vstack(grouped_rows)
-    return grouped_data, grouped_labels, grouped_names
+    return grouped_data, grouped_labels, grouped_names, group_members
+
+
+def write_group_report(report_path, group_members, group_toml=""):
+    lines = ["Local Mode Group Report", "=======================", ""]
+    if group_toml:
+        lines.append(f"Source TOML: {group_toml}")
+    else:
+        lines.append("Source TOML: <none>")
+    lines.append("")
+
+    for group_name, members in group_members.items():
+        lines.append(f"Group: {group_name}")
+        lines.append(f"Count: {len(members)}")
+        if members:
+            lines.append("Local modes:")
+            for label in members:
+                lines.append(f"- {label}")
+        else:
+            lines.append("Local modes:")
+            lines.append("- <none>")
+        lines.append("")
+    if group_toml:
+        Path(report_path).write_text("\n".join(lines), encoding="utf-8")
 
 
 def select_rows_for_plot(norm_data, row_labels, row_groups, top_n):
@@ -207,7 +241,7 @@ def build_group_colors(row_groups):
         if group not in unique_groups:
             unique_groups.append(group)
 
-    palette = plt.cm.tab20(np.linspace(0, 1, max(len(unique_groups), 1)))
+    palette = plt.cm.nipy_spectral(np.linspace(0, 1, max(len(unique_groups), 1)))
     colors = {}
     for idx, group in enumerate(unique_groups):
         colors[group] = palette[idx]
@@ -216,14 +250,14 @@ def build_group_colors(row_groups):
     return [colors[group] for group in row_groups]
 
 
-def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_png):
+def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot):
     x = np.arange(len(mode_labels))
     fig, (ax, ax_leg) = plt.subplots(
         1,
         2,
-        figsize=(16, 7),
-        dpi=150,
-        gridspec_kw={"width_ratios": [3, 2]},  # 60% plot, 40% legend
+        figsize=(24, 12),
+        dpi=600,
+        gridspec_kw={"width_ratios": [8, 2]},
     )
 
     colors = build_group_colors(row_groups)
@@ -256,8 +290,8 @@ def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_png):
         handles,
         labels,
         loc="upper left",
-        fontsize=7,
-        ncol=4,
+        fontsize=8,
+        ncol=2 if len(labels) < 20 else 3,
         frameon=True,
         borderaxespad=0.0,
         handlelength=1.0,
@@ -266,26 +300,31 @@ def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_png):
     )
 
     fig.tight_layout()
-    fig.savefig(out_png)
+    fig.savefig(out_plot, format="png")
     plt.close(fig)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Plot local mode character chart from local_mode_properties.csv")
-    parser.add_argument("--matrix-csv", default="local_mode_properties.csv")
-    parser.add_argument("--analysis-csv", default="analysis_of_local_modes.csv")
-    parser.add_argument("--output", default="local_mode_character.png")
-    parser.add_argument("--max-modes", type=int, default=48, help="Number of normal modes (columns) to plot")
+    parser.add_argument("--matrix-csv", default="local_mode_properties.csv", help="CSV file with local mode properties matrix (q_n vs normal modes)")
+    parser.add_argument("--analysis-csv", default="analysis_of_local_modes.csv", help="CSV file with local mode property analysis (No, i, j, k, l, q_n, Name, AtomSymbols)")
+    parser.add_argument("--output", default="local_mode_character.svg", help="Output file for the plot")
+    parser.add_argument("--max-modes", type=int, default=888, help="Number of normal modes (columns) to plot")
     parser.add_argument(
         "--mode-list",
         default="",
         help="Comma-delimited normal modes to plot on x-axis, e.g. 1,2,5,10. Overrides --max-modes.",
     )
-    parser.add_argument("--top-n", type=int, default=48, help="Number of local modes (rows) to show in legend")
+    parser.add_argument("--top-n", type=int, default=888, help="Number of local modes (rows) to show in legend")
     parser.add_argument(
         "--group-toml",
-        default="bodipy.toml",
-        help="Optional TOML file with pop/group rules (default: bodipy.toml)",
+        default="",
+        help="Optional TOML file with pop/group rules",
+    )
+    parser.add_argument(
+        "--group-report",
+        default="",
+        help="Optional output text file for group definitions (default: <output_stem>_groups.txt)",
     )
     args = parser.parse_args()
 
@@ -308,7 +347,7 @@ def main():
 
     analysis_rows = load_analysis_rows(args.analysis_csv)
     group_rules = parse_group_config(args.group_toml)
-    grouped_data, grouped_labels, grouped_names = apply_grouping(norm_data, analysis_rows, group_rules)
+    grouped_data, grouped_labels, grouped_names, group_members = apply_grouping(norm_data, analysis_rows, group_rules)
 
     stacked_data, row_labels, row_groups = select_rows_for_plot(
         grouped_data,
@@ -318,7 +357,13 @@ def main():
     )
 
     make_plot(mode_labels, stacked_data, row_labels, row_groups, args.output)
+    report_path = args.group_report.strip()
+    if not report_path:
+        output_path = Path(args.output)
+        report_path = str(output_path.with_name(f"{output_path.stem}_groups.txt"))
+    write_group_report(report_path, group_members, args.group_toml)
     print(f"Saved plot to {args.output}")
+    print(f"Saved group report to {report_path}")
 
 
 if __name__ == "__main__":
