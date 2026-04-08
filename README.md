@@ -20,9 +20,13 @@ This project is a uv-managed, installable Python CLI package for parsing LModeA 
   - x-axis: selected normal modes.
   - y-axis: local mode character (%).
   - legend on a dedicated right panel (40% of figure width).
+- Produces a companion text report that lists group definitions:
+  - group name
+  - local modes assigned to that group
 
 Main output:
 - local_mode_character.png (or your selected output name)
+- local_mode_character_groups.txt (or `<output_stem>_groups.txt`)
 
 ## Setup
 
@@ -47,10 +51,18 @@ Option A: run from `bodipy` directory
 2. `uv run --project .. lmodea-extract -i bodipy.out`
 3. `uv run --project .. lmodea-plot --group-toml bodipy.toml --output bodipy_grouped.png`
 
+This writes:
+- `bodipy_grouped.png`
+- `bodipy_grouped_groups.txt`
+
 Option B: run from project root with explicit paths
 
 1. `uv run lmodea-extract -i bodipy/bodipy.out --analysis-csv bodipy/analysis_of_local_modes.csv --local-props-csv bodipy/local_mode_properties.csv --normal-modes-csv bodipy/normal_mode_properties.csv`
 2. `uv run lmodea-plot --matrix-csv bodipy/local_mode_properties.csv --analysis-csv bodipy/analysis_of_local_modes.csv --group-toml bodipy/bodipy.toml --output bodipy/bodipy_grouped.png`
+
+This writes:
+- `bodipy/bodipy_grouped.png`
+- `bodipy/bodipy_grouped_groups.txt`
 
 ## Command reference
 
@@ -136,6 +148,16 @@ Options:
 - `--mode-list` (comma-delimited mode ids, overrides `--max-modes`)
 - `--top-n` (Number of local modes (rows) to show in legend, default: `888`)
 - `--group-toml` (Optional TOML file with pop/group rules)
+- `--group-report` (Optional output text file for group report. Default: `<output_stem>_groups.txt`)
+
+### Group report output
+
+The plot command writes a text report with:
+- source TOML (or `<none>` if grouping is not used)
+- each group name
+- number of local modes in each group
+- full list of local mode labels in that group
+
 
 ## TOML grouping format
 
