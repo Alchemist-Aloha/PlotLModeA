@@ -250,15 +250,24 @@ def build_group_colors(row_groups):
     return [colors[group] for group in row_groups]
 
 
-def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot, show_freq=False):
+def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot, show_freq=False, raman_intensities=None):
     x = np.arange(len(mode_labels))
-    fig, (ax, ax_leg) = plt.subplots(
-        1,
-        2,
-        figsize=(24, 12),
-        dpi=600,
-        gridspec_kw={"width_ratios": [8, 2]},
-    )
+    
+    if raman_intensities is not None:
+        fig = plt.figure(figsize=(24, 15), dpi=600)
+        gs = fig.add_gridspec(2, 2, width_ratios=[8, 2], height_ratios=[4, 1], hspace=0.1)
+        ax = fig.add_subplot(gs[0, 0])
+        ax_raman = fig.add_subplot(gs[1, 0], sharex=ax)
+        ax_leg = fig.add_subplot(gs[:, 1])
+    else:
+        fig, (ax, ax_leg) = plt.subplots(
+            1,
+            2,
+            figsize=(24, 12),
+            dpi=600,
+            gridspec_kw={"width_ratios": [8, 2]},
+        )
+        ax_raman = None
 
     colors = build_group_colors(row_groups)
     bottom = np.zeros(len(mode_labels))
@@ -279,10 +288,20 @@ def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot, show_
     ax.set_xlim(-0.6, len(mode_labels) - 0.4)
     ax.set_ylim(0, 100)
     ax.set_ylabel("Local Mode Character (%)")
-    ax.set_xlabel("Normal Mode Frequency (cm$^{-1}$)" if show_freq else "Normal Mode u")
-    ax.set_xticks(x)
-    ax.set_xticklabels(mode_labels, rotation=45, ha="right", fontsize=7)
     ax.grid(axis="y", linestyle="--", linewidth=0.4, alpha=0.5)
+
+    if ax_raman is not None:
+        ax.tick_params(labelbottom=False)
+        ax_raman.bar(x, raman_intensities, width=0.4, color="black")
+        ax_raman.set_ylabel("Raman Int.")
+        ax_raman.set_xlabel("Normal Mode Frequency (cm$^{-1}$)" if show_freq else "Normal Mode u")
+        ax_raman.set_xticks(x)
+        ax_raman.set_xticklabels(mode_labels, rotation=45, ha="right", fontsize=7)
+        ax_raman.grid(axis="y", linestyle="--", linewidth=0.4, alpha=0.5)
+    else:
+        ax.set_xlabel("Normal Mode Frequency (cm$^{-1}$)" if show_freq else "Normal Mode u")
+        ax.set_xticks(x)
+        ax.set_xticklabels(mode_labels, rotation=45, ha="right", fontsize=7)
 
     handles, labels = ax.get_legend_handles_labels()
     ax_leg.axis("off")
@@ -299,8 +318,10 @@ def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot, show_
         columnspacing=0.6,
     )
 
-    fig.tight_layout()
-    fig.savefig(out_plot, format="png")
+    if ax_raman is None:
+        fig.tight_layout()
+        
+    fig.savefig(out_plot, format="png", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -332,6 +353,9 @@ def main():
     parser.add_argument(
         "--normal-mode-csv", default="normal_mode_properties.csv", help="CSV file with normal mode properties (used with --show-freq)"
     )
+    parser.add_argument(
+        "--raman-csv", default="", help="CSV file with Raman intensities (plot stick to zero vs normal mode x axis)"
+    )
     args = parser.parse_args()
 
     mode_labels, data = load_matrix(args.matrix_csv)
@@ -362,6 +386,48 @@ def main():
         args.top_n,
     )
 
+    raman_intensities = None
+    if args.raman_csv.strip():
+        # Preload mode frequencies to robustly match Raman Shifts to normal Modes
+        mode_to_freq = {}
+        if Path(args.normal_mode_csv).exists():
+            with Path(args.normal_mode_csv).open("r", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    try:
+                        mode_to_freq[int(row["Mode"])] = float(row["Frequency_cm-1"])
+                    except (ValueError, KeyError):
+                        pass
+
+        raman_dict = {}
+        with Path(args.raman_csv).open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for idx, row in enumerate(reader, start=1):
+                try:
+                    # safely get shift key (usually first column) and Sigma
+                    keys = list(row.keys())
+                    shift_key = keys[0] if keys else "Raman Shift (cm^-1)"
+                    shift = float(row.get(shift_key, 0.0))
+                    sigma = float(row.get("Sigma", 0.0))
+                except (ValueError, TypeError):
+                    continue
+                
+                mode_id = idx
+                if mode_to_freq:
+                    best_diff = float("inf")
+                    best_m = None
+                    for m, freq in mode_to_freq.items():
+                        diff = abs(shift - freq)
+                        if diff < best_diff:
+                            best_diff = diff
+                            best_m = m
+                    # if we have a match within a 5.0 cm^-1 tolerance, use it over arbitrary row index
+                    if best_m is not None and best_diff < 5.0:
+                        mode_id = best_m
+                        
+                raman_dict[mode_id] = sigma
+                
+        raman_intensities = [raman_dict.get(int(m), 0.0) for m in mode_labels]
+
     if args.show_freq:
         freq_map = {}
         with Path(args.normal_mode_csv).open("r", encoding="utf-8") as f:
@@ -372,7 +438,7 @@ def main():
                 freq_map[mode_index] = freq
         mode_labels = [freq_map.get(m, m) for m in mode_labels]
 
-    make_plot(mode_labels, stacked_data, row_labels, row_groups, args.output, show_freq=args.show_freq)
+    make_plot(mode_labels, stacked_data, row_labels, row_groups, args.output, show_freq=args.show_freq, raman_intensities=raman_intensities)
     report_path = args.group_report.strip()
     if not report_path:
         output_path = Path(args.output)
