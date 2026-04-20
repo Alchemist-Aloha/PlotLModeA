@@ -250,7 +250,7 @@ def build_group_colors(row_groups):
     return [colors[group] for group in row_groups]
 
 
-def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot):
+def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot, show_freq=False):
     x = np.arange(len(mode_labels))
     fig, (ax, ax_leg) = plt.subplots(
         1,
@@ -279,7 +279,7 @@ def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot):
     ax.set_xlim(-0.6, len(mode_labels) - 0.4)
     ax.set_ylim(0, 100)
     ax.set_ylabel("Local Mode Character (%)")
-    ax.set_xlabel("Normal Mode u")
+    ax.set_xlabel("Normal Mode Frequency (cm$^{-1}$)" if show_freq else "Normal Mode u")
     ax.set_xticks(x)
     ax.set_xticklabels(mode_labels, rotation=45, ha="right", fontsize=7)
     ax.grid(axis="y", linestyle="--", linewidth=0.4, alpha=0.5)
@@ -326,6 +326,12 @@ def main():
         default="",
         help="Optional output text file for group definitions (default: <output_stem>_groups.txt)",
     )
+    parser.add_argument(
+        "--show-freq", action="store_true", help="Use normal mode frequency (integer cm^-1) as x-axis labels instead of mode index"
+    )
+    parser.add_argument(
+        "--normal-mode-csv", default="normal_mode_properties.csv", help="CSV file with normal mode properties (used with --show-freq)"
+    )
     args = parser.parse_args()
 
     mode_labels, data = load_matrix(args.matrix_csv)
@@ -356,7 +362,17 @@ def main():
         args.top_n,
     )
 
-    make_plot(mode_labels, stacked_data, row_labels, row_groups, args.output)
+    if args.show_freq:
+        freq_map = {}
+        with Path(args.normal_mode_csv).open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                mode_index = int(row["Mode"])
+                freq = int(round(float(row["Frequency_cm-1"])))
+                freq_map[mode_index] = freq
+        mode_labels = [freq_map.get(m, m) for m in mode_labels]
+
+    make_plot(mode_labels, stacked_data, row_labels, row_groups, args.output, show_freq=args.show_freq)
     report_path = args.group_report.strip()
     if not report_path:
         output_path = Path(args.output)
