@@ -250,7 +250,7 @@ def build_group_colors(row_groups):
     return [colors[group] for group in row_groups]
 
 
-def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot, show_freq=False, raman_intensities=None):
+def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot, show_freq=False, raman_intensities=None, is_grouped=False):
     x = np.arange(len(mode_labels))
     
     if raman_intensities is not None:
@@ -309,8 +309,8 @@ def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot, show_
         handles,
         labels,
         loc="upper left",
-        fontsize=8,
-        ncol=2 if len(labels) < 20 else 3,
+        fontsize=14 if is_grouped else 8,
+        ncol=1 if is_grouped else (2 if len(labels) < 20 else 3),
         frameon=True,
         borderaxespad=0.0,
         handlelength=1.0,
@@ -438,7 +438,16 @@ def main():
                 freq_map[mode_index] = freq
         mode_labels = [freq_map.get(m, m) for m in mode_labels]
 
-    make_plot(mode_labels, stacked_data, row_labels, row_groups, args.output, show_freq=args.show_freq, raman_intensities=raman_intensities)
+    make_plot(
+        mode_labels, 
+        stacked_data, 
+        row_labels, 
+        row_groups, 
+        args.output, 
+        show_freq=args.show_freq, 
+        raman_intensities=raman_intensities,
+        is_grouped=bool(group_rules)
+    )
     report_path = args.group_report.strip()
     if not report_path:
         output_path = Path(args.output)
