@@ -121,9 +121,11 @@ def _extract_normal_mode_properties(lines):
 	if start == -1:
 		raise ValueError("Could not find normal mode vibration results section")
 
-	end = _find_line_index(lines, "Results of translations and rotations:", start=start)
+	end = _find_line_index(lines, "Results of translations and rotations:", start=start) # Correct ending if iprint is 1
 	if end == -1:
-		raise ValueError("Could not find end of normal mode vibration section")
+		end = _find_line_index(lines, "Principal axes and moments of inertia in atomic units:", start=start) # Correct ending if iprint is 0 (default)
+		if end == -1:
+			raise ValueError("Could not find end of normal mode vibration section")
 
 	normal_modes = []
 	block_start = None

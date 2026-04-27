@@ -127,13 +127,46 @@ def parse_group_config(config_path=None):
 
 
 def mode_matches_group(analysis_row, group_rule):
+    """mode_matches_group checks if a local mode is or is not a part of a group. For a mode to be in this group, at least one pattern in the group_rule must be a subset of the local mode's atoms. The local mode's mode_size must also be allowed by the group rule.
+
+    Args:
+        analysis_row (Object, representing a local mode): The local mode to be checked.
+            The object is assumed to have a dictonary-like structure, with 
+            - atoms (list, strings): The atoms in the mode
+            - mode_size (int): The number of atoms in the mode. Always 2 for stretching modes, 3 for beinding modes, and 4 for dihedrial modes
+        group_rule (Object, representing a group of modes): The rule describing the group of modes.
+            The object is assumed to have a dictionary-like structure, with
+            - patterns (list, tuples of strings): The list of atom connections in the group. The tuples will be of varing sizes.
+            - modes (list, ints): The types of modes allowed to be in the group. 2 for stretching modes, 3 for beinding modes, and 4 for dihedrial modes
+
+    Returns:
+        Bool: True when the mode belongs to the group, false when the mode does not belong to the group.
+    """
     if analysis_row["mode_size"] not in group_rule["modes"]:
         return False
+    
+    atom_full = set(analysis_row["atoms"]) # {"C13", "H12", ...}
+    # Preprocess atoms
+    atom_elements = {''.join(filter(str.isalpha, a)) for a in atom_full}   # {"C", "H", ...}
 
-    atoms = analysis_row["atoms"]
-    for pattern in group_rule["patterns"]:
-        if pattern.issubset(atoms):
+    for pattern in group_rule["patterns"]: #For each pattern in the group rule
+        match = True
+        for e in pattern: #check each part matches the atoms
+            elem = ''.join(filter(str.isalpha, e))
+            num = ''.join(filter(str.isdigit, e))
+            if num:  
+                # Exact match required (e.g., "H12")
+                if e not in atom_full:
+                    match = False
+                    break
+            else:
+                # Element-only match (e.g., "C")
+                if elem not in atom_elements:
+                    match = False
+                    break
+        if match:
             return True
+        
     return False
 
 
@@ -324,6 +357,43 @@ def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot, show_
     fig.savefig(out_plot, format="png", bbox_inches="tight")
     plt.close(fig)
 
+def make_chart(groupNames, data, filePath, frequencies):
+    """Creates a txt file with the information about all the normal modes. The table includes the internal ID number, mode frequency, local mode breakdown. Intented to be extend later with raman intensity, or anythng else we think of.
+
+    Args:
+        groupNames (list, strings, with N elements): The names of the groups. N is the number of groups
+        data (N by M 2d matrix, floats): The numerical data from LModeA. Each row represents a group, each column represents one of the normal modes, so each element in the matrix is the group's contribution to a single normal mode. N is the number of groups and M is the number of normal modes
+        
+    Returns:
+        Nothing. The chart is exported as a txt file, so the function has no need to pass anything down.
+    """
+    
+    lines = ["Normal Mode report", "Internal ID Number | Mode Frequency | Local Modes", "=============================================="]
+    for mode_index in range(data.shape[1]): # mode < M, its the index of which normal mode is being considered. mode_index is 0 indexed, and the actual normal modes are 1 indexed.
+        # Find all local modes with contribution over threshold, and store them as a object array
+        modes = [{"groupName" : "NULL MODE", "contribution": 0}, {"groupName" : "NULL MODE", "contribution": 0}, {"groupName" : "NULL MODE", "contribution": 0}]
+        THRESHOLD = 10 # WARNING - Magic number, in percents. Should be around 10.
+        currentLine = (str(mode_index+1) + " | ") 
+        # WARNING - odd workaround. if the save-freq flag is used, then frequencies will be [1,2,3...] so lets check the first few and see. In the very unlike event that the lowest two modes have frequencies of 1 cm-1 and 2 cm-1, then this will cause the report to be full of Xs! 
+        currentLine += str(frequencies[mode_index]) + " cm^-1 | " if frequencies[0] != 1 or frequencies[1] != 2 else "X | "
+        for group_index in range(len(groupNames)):
+            currentMode = {"groupName" : groupNames[group_index], "contribution" : data[group_index][mode_index]}
+            if currentMode["contribution"] > THRESHOLD and currentMode["contribution"] > modes[2]["contribution"]:
+                    modes[2] = modes[1]
+                    if currentMode["contribution"] > modes[1]["contribution"]:
+                        modes[1] = modes[0]
+                        if currentMode["contribution"] > modes[0]["contribution"]:
+                            modes[0] = currentMode
+                        else:
+                            modes[1] = currentMode
+                    else:
+                        modes[2] = currentMode
+        for m in modes:
+            if m["groupName"] != "NULL MODE":
+                currentLine += m["groupName"] + " " + str(round(m["contribution"], 1) ) + "%, "
+        currentLine = currentLine[0:len(currentLine)-2]
+        lines.append(currentLine)
+    Path(filePath).write_text("\n".join(lines), encoding="utf-8")
 
 def main():
     parser = argparse.ArgumentParser(description="Plot local mode character chart from local_mode_properties.csv")
@@ -346,6 +416,11 @@ def main():
         "--group-report",
         default="",
         help="Optional output text file for group definitions (default: <output_stem>_groups.txt)",
+    )
+    parser.add_argument(
+        "--breakdown-report",
+        default="",
+        help="Optional output text file for local mode breakdown (default: <output_stem>_breakdown.txt)",
     )
     parser.add_argument(
         "--show-freq", action="store_true", help="Use normal mode frequency (integer cm^-1) as x-axis labels instead of mode index"
@@ -455,6 +530,13 @@ def main():
     write_group_report(report_path, group_members, args.group_toml)
     print(f"Saved plot to {args.output}")
     print(f"Saved group report to {report_path}")
+    breakdown_path = args.breakdown_report.strip()
+    if not breakdown_path:
+        output_path = Path(args.output)
+        breakdown_path = str(output_path.with_name(f"{output_path.stem}_breakdown.txt"))
+    if args.group_toml:
+        make_chart(row_labels, stacked_data, breakdown_path, mode_labels)
+        print(f"Saved local mode breakdown to {breakdown_path}")
 
 
 if __name__ == "__main__":
