@@ -357,7 +357,7 @@ def make_plot(mode_labels, stacked_data, row_labels, row_groups, out_plot, show_
     fig.savefig(out_plot, format="png", bbox_inches="tight")
     plt.close(fig)
 
-def make_chart(groupNames, data, filePath, frequencies):
+def make_chart(groupNames, data, filePath, frequencies, mode_ids=None):
     """Creates a txt file with the information about all the normal modes. The table includes the internal ID number, mode frequency, local mode breakdown. Intented to be extend later with raman intensity, or anythng else we think of.
 
     Args:
@@ -373,7 +373,10 @@ def make_chart(groupNames, data, filePath, frequencies):
         # Find all local modes with contribution over threshold, and store them as a object array
         modes = [{"groupName" : "NULL MODE", "contribution": 0}, {"groupName" : "NULL MODE", "contribution": 0}, {"groupName" : "NULL MODE", "contribution": 0}]
         THRESHOLD = 10 # WARNING - Magic number, in percents. Should be around 10.
-        currentLine = (str(mode_index+1) + " | ") 
+        internal_id = mode_index + 1
+        if mode_ids and mode_index < len(mode_ids):
+            internal_id = mode_ids[mode_index]
+        currentLine = (str(internal_id) + " | ") 
         # WARNING - odd workaround. if the save-freq flag is used, then frequencies will be [1,2,3...] so lets check the first few and see. In the very unlike event that the lowest two modes have frequencies of 1 cm-1 and 2 cm-1, then this will cause the report to be full of Xs! 
         currentLine += str(frequencies[mode_index]) + " cm^-1 | " if frequencies[0] != 1 or frequencies[1] != 2 else "X | "
         for group_index in range(len(groupNames)):
@@ -503,6 +506,7 @@ def main():
                 
         raman_intensities = [raman_dict.get(int(m), 0.0) for m in mode_labels]
 
+    mode_ids = list(mode_labels)
     if args.show_freq:
         freq_map = {}
         with Path(args.normal_mode_csv).open("r", encoding="utf-8") as f:
@@ -535,7 +539,7 @@ def main():
         output_path = Path(args.output)
         breakdown_path = str(output_path.with_name(f"{output_path.stem}_breakdown.txt"))
     if args.group_toml:
-        make_chart(row_labels, stacked_data, breakdown_path, mode_labels)
+        make_chart(row_labels, stacked_data, breakdown_path, mode_labels, mode_ids=mode_ids)
         print(f"Saved local mode breakdown to {breakdown_path}")
 
 
